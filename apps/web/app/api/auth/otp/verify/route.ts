@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import jwt from 'jsonwebtoken';
-import { mockDB } from '../../../../../lib/mock-db';
+import { userService, profileService } from '@/lib/db-service';
 
 const VerifySchema = z.object({
   phone: z.string().regex(/^\+972\d{9}$/, 'Invalid Israeli phone number'),
@@ -29,26 +29,28 @@ export async function POST(request: NextRequest) {
     }
 
     // Find or create user
-    let user = mockDB.findUserByPhone(phone);
+    let user = await userService.findByPhone(phone);
     const isNewUser = !user;
 
     if (!user) {
       // Create new user
-      user = mockDB.createUser({
+      user = await userService.create({
         phone,
         name: name || undefined,
-        role: role || 'SEEKER', // Default role
-        verifiedFlags: { phone_verified: true }
+        role: role || 'SEEKER',
       });
     } else {
       // Update existing user verification
       const updates: any = {
-        verifiedFlags: { ...user.verifiedFlags, phone_verified: true }
+        verified_flags: { ...user.verified_flags, phone_verified: true }
       };
       if (name) updates.name = name;
       if (role) updates.role = role;
-      user = mockDB.updateUser(user.id, updates)!;
+      user = await userService.update(user.id, updates);
     }
+
+    // Get user profile
+    const profile = await profileService.get(user.id);
 
     // Generate JWT tokens
     const accessToken = jwt.sign(
@@ -74,8 +76,6 @@ export async function POST(request: NextRequest) {
       { algorithm: 'HS256' }
     );
 
-    // Update user's last login (mock - no timestamp tracking in mock DB)
-
     return NextResponse.json({
       success: true,
       accessToken,
@@ -87,8 +87,8 @@ export async function POST(request: NextRequest) {
         name: user.name,
         role: user.role,
         lang: user.lang,
-        verifiedFlags: user.verifiedFlags,
-        profile: user.Profile,
+        verifiedFlags: user.verified_flags,
+        profile: profile || null,
         isNewUser
       },
       redirectTo: isNewUser ? '/onboarding' : '/me'

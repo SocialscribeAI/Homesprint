@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@homesprint/db';
+import { profileService, userService } from '@/lib/db-service';
 import { getCurrentUser } from '@/lib/auth';
 
 const ProfileSchema = z.object({
@@ -34,9 +34,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const profile = await prisma.profile.findUnique({
-      where: { userId: user.id }
-    });
+    const profile = await profileService.get(user.id);
 
     if (!profile) {
       return NextResponse.json({
@@ -68,28 +66,21 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const validatedData = ProfileSchema.parse(body);
 
-    // Convert string dates to Date objects
-    const profileData = {
-      ...validatedData,
-      moveInEarliest: new Date(validatedData.moveInEarliest),
-      moveInLatest: new Date(validatedData.moveInLatest)
-    };
-
-    const profile = await prisma.profile.upsert({
-      where: { userId: user.id },
-      update: profileData,
-      create: {
-        userId: user.id,
-        ...profileData
-      }
+    const profile = await profileService.upsert({
+      user_id: user.id,
+      budget_min: validatedData.budgetMin,
+      budget_max: validatedData.budgetMax,
+      move_in_earliest: validatedData.moveInEarliest,
+      move_in_latest: validatedData.moveInLatest,
+      areas: validatedData.areas,
+      occupancy_type: validatedData.occupancyType,
+      lifestyle: validatedData.lifestyle,
+      bio: validatedData.bio,
     });
 
     // Calculate profile completeness
     const completeness = calculateProfileCompleteness(profile);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { profileCompleteness: completeness }
-    });
+    await userService.update(user.id, { profile_completeness: completeness });
 
     return NextResponse.json({
       profile: { ...profile, completeness },
@@ -122,16 +113,16 @@ function calculateProfileCompleteness(profile: any): number {
   const maxScore = 100;
 
   // Budget (20 points)
-  if (profile.budgetMin && profile.budgetMax) score += 20;
+  if (profile.budget_min && profile.budget_max) score += 20;
 
   // Move-in dates (15 points)
-  if (profile.moveInEarliest && profile.moveInLatest) score += 15;
+  if (profile.move_in_earliest && profile.move_in_latest) score += 15;
 
   // Areas (15 points)
   if (profile.areas && profile.areas.length > 0) score += 15;
 
   // Occupancy type (10 points)
-  if (profile.occupancyType) score += 10;
+  if (profile.occupancy_type) score += 10;
 
   // Lifestyle preferences (20 points)
   if (profile.lifestyle) {

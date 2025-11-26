@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { mockDB } from '../../../lib/mock-db';
-import { getCurrentUser } from '../../../lib/auth';
+import { listingService } from '@/lib/db-service';
+import { getCurrentUser } from '@/lib/auth';
 
 const SearchSchema = z.object({
   query: z.string().optional(),
@@ -20,79 +20,29 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const filters = SearchSchema.parse(Object.fromEntries(searchParams));
 
-    const { page, limit, sortBy, ...searchFilters } = filters;
-    const skip = (page - 1) * limit;
+    const { page, limit, query, ...searchFilters } = filters;
+    const offset = (page - 1) * limit;
 
-    // Build where clause
-    const where: any = {
-      status: 'active'
-    };
-
-    // Apply filters
-    if (searchFilters.minRent || searchFilters.maxRent) {
-      where.rent = {};
-      if (searchFilters.minRent) where.rent.gte = searchFilters.minRent;
-      if (searchFilters.maxRent) where.rent.lte = searchFilters.maxRent;
+    // Use Supabase service for listings
+    let listings;
+    if (query) {
+      listings = await listingService.search(query);
+    } else {
+      listings = await listingService.getActive({
+        neighborhood: searchFilters.neighborhood,
+        minRent: searchFilters.minRent,
+        maxRent: searchFilters.maxRent,
+        type: searchFilters.type,
+        furnished: searchFilters.furnished,
+        limit,
+        offset,
+      });
     }
 
-    if (searchFilters.type) {
-      where.type = searchFilters.type;
-    }
-
-    if (searchFilters.neighborhood) {
-      where.neighborhood = { contains: searchFilters.neighborhood, mode: 'insensitive' };
-    }
-
-    if (searchFilters.furnished !== undefined) {
-      where.furnished = searchFilters.furnished;
-    }
-
-    // Full-text search
-    if (searchFilters.query) {
-      // For MVP, use simple text search
-      where.OR = [
-        { description: { contains: searchFilters.query, mode: 'insensitive' } },
-        { address: { contains: searchFilters.query, mode: 'insensitive' } },
-        { neighborhood: { contains: searchFilters.query, mode: 'insensitive' } }
-      ];
-    }
-
-    // Build order by
-    let orderBy: any;
-    switch (sortBy) {
-      case 'price_asc':
-        orderBy = { rent: 'asc' };
-        break;
-      case 'price_desc':
-        orderBy = { rent: 'desc' };
-        break;
-      case 'date_desc':
-        orderBy = { createdAt: 'desc' };
-        break;
-      default:
-        orderBy = { completeness: 'desc' }; // Relevance proxy
-    }
-
-    // Execute query using mock DB
-    const listings = mockDB.findListings({
-      ...searchFilters,
-      sortBy
-    }).slice(skip, skip + limit);
-
-    const total = mockDB.getListingsCount(searchFilters);
-
-    // Add owner info to listings (mock)
-    const listingsWithOwners = listings.map(listing => ({
-      ...listing,
-      owner: mockDB.findUserById(listing.ownerUserId) ? {
-        id: listing.ownerUserId,
-        name: mockDB.findUserById(listing.ownerUserId)?.name,
-        verifiedFlags: mockDB.findUserById(listing.ownerUserId)?.verifiedFlags
-      } : undefined
-    }));
+    const total = listings.length;
 
     return NextResponse.json({
-      listings: listingsWithOwners,
+      listings,
       pagination: {
         page,
         limit,
@@ -169,20 +119,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const listingData = CreateListingSchema.parse(body);
 
-    // Calculate completeness
-    const completeness = calculateListingCompleteness(listingData);
-
-    const listing = mockDB.createListing({
-      ownerUserId: user.id,
+    const listing = await listingService.create({
+      owner_user_id: user.id,
       type: listingData.type,
       address: listingData.address,
       neighborhood: listingData.neighborhood,
       lat: listingData.lat,
       lng: listingData.lng,
       rent: listingData.rent,
-      billsAvg: listingData.billsAvg,
+      description: listingData.description,
+      available_from: listingData.availableFrom,
+      bills_avg: listingData.billsAvg,
       deposit: listingData.deposit,
-      sizeM2: listingData.sizeM2,
+      size_m2: listingData.sizeM2,
       rooms: listingData.rooms,
       bathrooms: listingData.bathrooms,
       floor: listingData.floor,
@@ -192,17 +141,14 @@ export async function POST(request: NextRequest) {
       accessibility: listingData.accessibility,
       roommates: listingData.roommates,
       policies: listingData.policies,
-      availableFrom: new Date(listingData.availableFrom),
-      leaseTermMonths: listingData.leaseTermMonths,
+      lease_term_months: listingData.leaseTermMonths,
       photos: listingData.photos,
-      videoUrl: listingData.videoUrl,
-      description: listingData.description,
-      completeness
+      video_url: listingData.videoUrl,
     });
 
     return NextResponse.json({
       listing,
-      message: completeness >= 70 ? 'Listing created and published!' : 'Listing created as draft. Complete more fields to publish.'
+      message: 'Listing created successfully!'
     }, { status: 201 });
 
   } catch (error) {
@@ -224,31 +170,4 @@ export async function POST(request: NextRequest) {
       }
     }, { status: 500 });
   }
-}
-
-function calculateListingCompleteness(data: any): number {
-  let score = 0;
-
-  // Basic info (25 points)
-  if (data.address && data.neighborhood && data.type) score += 25;
-
-  // Financial (20 points)
-  if (data.rent) score += 20;
-
-  // Property features (20 points)
-  if (data.amenities && data.amenities.length > 0) score += 10;
-  if (data.sizeM2 || data.rooms) score += 5;
-  if (data.furnished !== undefined) score += 5;
-
-  // Visual content (20 points)
-  if (data.photos && data.photos.length > 0) score += 10;
-  if (data.description) score += 5;
-  if (data.videoUrl) score += 5;
-
-  // Additional details (15 points)
-  if (data.accessibility && data.accessibility.length > 0) score += 5;
-  if (data.policies) score += 5;
-  if (data.roommates) score += 5;
-
-  return Math.min(score, 100);
 }

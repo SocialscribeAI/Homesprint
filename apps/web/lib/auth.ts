@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
-import { mockDB } from './mock-db';
+import { userService } from './db-service';
 
 export interface AuthUser {
   id: string;
@@ -30,7 +30,7 @@ export async function getCurrentUser(request: NextRequest): Promise<AuthUser | n
       return null;
     }
 
-    const user = mockDB.findUserById(decoded.sub as string);
+    const user = await userService.findById(decoded.sub as string);
 
     if (!user) {
       return null;
@@ -43,7 +43,7 @@ export async function getCurrentUser(request: NextRequest): Promise<AuthUser | n
       name: user.name,
       role: user.role,
       lang: user.lang,
-      verifiedFlags: user.verifiedFlags
+      verifiedFlags: user.verified_flags
     };
 
   } catch (error) {

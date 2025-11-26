@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@homesprint/db';
 
 // Rate limiting (simplified for MVP)
 const otpRequests = new Map<string, { count: number; resetTime: number }>();
