@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return await response.json();
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<void> => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -100,11 +100,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         verifiedFlags: { email_verified: data.user.email_confirmed_at ? true : false },
       });
     }
-
-    return data;
   };
 
-  const signUpWithEmail = async (email: string, password: string) => {
+  const signUpWithEmail = async (email: string, password: string): Promise<void> => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -123,8 +121,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         verifiedFlags: {},
       });
     }
-
-    return data;
   };
 
   const logout = async () => {
