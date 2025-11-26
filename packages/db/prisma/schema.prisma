@@ -25,8 +25,9 @@ model User {
   Listings       Listing[]
   Messages       Message[]
   Applications   Application[]
-  Threads        Thread[]
   Reports        Report[]
+  Viewings       Viewing[]
+  Payments       Payment[]
 
   @@map("users")
 }
@@ -86,8 +87,8 @@ model Listing {
   // Relations
   Applications    Application[]
   Viewings        Viewing[]
-  Reports         Report[]
   Threads         Thread[]
+  Payments        Payment[]
 
   @@index([status, availableFrom])
   @@index([rent, neighborhood])
