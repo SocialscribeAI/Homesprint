@@ -22,8 +22,16 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import clsx from 'clsx';
+import { LucideIcon } from 'lucide-react';
 
-const navItems = [
+type NavItem = {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  badge?: boolean;
+};
+
+const navItems: NavItem[] = [
   { href: '/me', icon: Home, label: 'Dashboard' },
   { href: '/listings', icon: Search, label: 'Find Homes' },
   { href: '/messages', icon: MessageSquare, label: 'Messages', badge: true },
@@ -31,7 +39,7 @@ const navItems = [
   { href: '/me/saved', icon: Heart, label: 'Saved' },
 ];
 
-const listerNavItems = [
+const listerNavItems: NavItem[] = [
   { href: '/me/listings', icon: Building2, label: 'My Listings' },
   { href: '/me/applications', icon: FileText, label: 'Applications' },
 ];
@@ -164,7 +172,7 @@ function SidebarContent({
   onClose,
 }: {
   user: any;
-  navItems: typeof navItems;
+  navItems: NavItem[];
   pathname: string;
   onLogout: () => void;
   onClose?: () => void;
