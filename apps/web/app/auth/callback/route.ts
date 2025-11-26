@@ -22,20 +22,28 @@ export async function GET(request: NextRequest) {
   }
 
   if (code) {
-    // Create a response that we'll add cookies to
-    const response = NextResponse.redirect(new URL('/me', origin))
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Missing Supabase env vars')
+      return NextResponse.redirect(new URL('/login?error=Configuration error', origin))
+    }
+
+    // We need to collect cookies to set on the response
+    const cookiesToSet: { name: string; value: string; options: any }[] = []
     
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      supabaseUrl,
+      supabaseKey,
       {
         cookies: {
           getAll() {
             return request.cookies.getAll()
           },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              response.cookies.set(name, value, options)
+          setAll(cookies) {
+            cookies.forEach((cookie) => {
+              cookiesToSet.push(cookie)
             })
           },
         },
@@ -43,31 +51,35 @@ export async function GET(request: NextRequest) {
     )
 
     try {
+      console.log('Exchanging code for session...')
       const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
       if (exchangeError) {
-        console.error('Exchange error:', exchangeError)
+        console.error('Exchange error:', exchangeError.message)
         return NextResponse.redirect(
-          new URL(
-            `/login?error=${encodeURIComponent(exchangeError.message)}`,
-            origin
-          )
+          new URL(`/login?error=${encodeURIComponent(exchangeError.message)}`, origin)
         )
       }
 
       console.log('Session exchanged successfully for:', data.user?.email)
       
-      // Return the response with cookies set
+      // Create redirect response and set all cookies
+      const response = NextResponse.redirect(new URL('/me', origin))
+      
+      cookiesToSet.forEach(({ name, value, options }) => {
+        response.cookies.set(name, value, options)
+      })
+
       return response
-    } catch (err) {
-      console.error('Callback error:', err)
+    } catch (err: any) {
+      console.error('Callback error:', err?.message || err)
       return NextResponse.redirect(
         new URL('/login?error=Authentication failed', origin)
       )
     }
   }
 
-  // If no code or error, redirect to home (not login to avoid loop)
+  // If no code or error, redirect to home
   console.log('No code or error in callback, redirecting to home')
   return NextResponse.redirect(new URL('/', origin))
 }
