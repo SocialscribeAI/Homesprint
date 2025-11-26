@@ -1,40 +1,19 @@
-import { createServerClient } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+  const response = NextResponse.next()
+  const supabase = createMiddlewareClient({ req: request, res: response })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({
-            request,
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  // Refresh session if expired
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  // Protected routes - redirect to login if not authenticated
+  const user = session?.user
+
   const protectedPaths = ['/me', '/listings', '/messages', '/schedule']
-  const isProtectedRoute = protectedPaths.some(path => 
+  const isProtectedRoute = protectedPaths.some(path =>
     request.nextUrl.pathname.startsWith(path)
   )
 
@@ -45,11 +24,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Auth routes - redirect to dashboard if already logged in
   const authPaths = ['/login', '/signup']
-  const isAuthRoute = authPaths.some(path => 
-    request.nextUrl.pathname === path
-  )
+  const isAuthRoute = authPaths.some(path => request.nextUrl.pathname === path)
 
   if (isAuthRoute && user) {
     const url = request.nextUrl.clone()
@@ -57,20 +33,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  return supabaseResponse
+  return response
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     * - auth/callback (OAuth callback - must not be intercepted)
-     * - api routes
-     */
-    '/((?!_next/static|_next/image|favicon.ico|auth/callback|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon\.ico|auth/callback|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
