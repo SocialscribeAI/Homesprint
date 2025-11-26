@@ -1,0 +1,253 @@
+// Prisma schema for HomeSprint MVP
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User management
+model User {
+  id             String   @id @default(cuid())
+  role           Role     @default(SEEKER)
+  phone          String   @unique
+  email          String?  @unique
+  name           String?
+  lang           String   @default("en")
+  verifiedFlags  Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  Profile        Profile?
+  Listings       Listing[]
+  Messages       Message[]
+  Applications   Application[]
+  Threads        Thread[]
+  Reports        Report[]
+
+  @@map("users")
+}
+
+model Profile {
+  userId           String  @id
+  user             User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetMin        Int
+  budgetMax        Int
+  moveInEarliest   DateTime
+  moveInLatest     DateTime
+  areas            String[]
+  occupancyType    String
+  lifestyle        Json    @default("{}")
+  bio              String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+// Listing management
+model Listing {
+  id              String   @id @default(cuid())
+  ownerUserId     String
+  owner           User     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  type            String
+  address         String
+  neighborhood    String
+  geo             Unsupported("geography(Point,4326)")
+  rent            Int
+  billsAvg        Int?
+  deposit         Int?
+  sizeM2          Int?
+  rooms           Int?
+  bathrooms       Int?
+  floor           Int?
+  elevator        Boolean?
+  furnished       Boolean?
+  amenities       String[]
+  accessibility   String[]
+  roommates       Json?
+  policies        Json?
+  availableFrom   DateTime
+  leaseTermMonths Int?
+  photos          String[]
+  videoUrl        String?
+  description     String
+  completeness    Int      @default(0)
+  status          String   @default("draft")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  Applications    Application[]
+  Viewings        Viewing[]
+  Reports         Report[]
+  Threads         Thread[]
+
+  @@index([status, availableFrom])
+  @@index([rent, neighborhood])
+  @@index([ownerUserId, status])
+  @@map("listings")
+}
+
+// Application system
+model Application {
+  id            String    @id @default(cuid())
+  listingId     String
+  listing       Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  seekerUserId  String
+  seeker        User      @relation(fields: [seekerUserId], references: [id], onDelete: Cascade)
+
+  status        String    @default("pending")
+  score         Json      @default("{}")
+  message       String?
+  viewingRequested Boolean @default(false)
+  viewingScheduled Boolean @default(false)
+  viewingCompleted Boolean @default(false)
+  viewingCount   Int      @default(0)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  Threads       Thread[]
+
+  @@unique([listingId, seekerUserId])
+  @@index([listingId, status])
+  @@index([seekerUserId, status])
+  @@map("applications")
+}
+
+// Messaging system
+model Thread {
+  id            String    @id @default(cuid())
+  participants  String[]  // Array of user IDs
+  listingId     String?
+  applicationId String?
+
+  title         String
+  lastMessageAt DateTime  @default(now())
+  isActive      Boolean   @default(true)
+  messageCount  Int       @default(0)
+  unreadCount   Json      @default("{}")
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  Messages      Message[]
+  Listing       Listing?  @relation(fields: [listingId], references: [id])
+  Application   Application? @relation(fields: [applicationId], references: [id])
+
+  @@index([participants])
+  @@index([lastMessageAt])
+  @@index([isActive])
+  @@map("threads")
+}
+
+model Message {
+  id              String   @id @default(cuid())
+  threadId        String
+  thread          Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderId        String
+  sender          User     @relation(fields: [senderId], references: [id])
+
+  body            String
+  attachments     Json     @default("[]")
+  sentAt          DateTime @default(now())
+  readAt          Json?
+  editedAt        DateTime?
+  replyToId       String?
+  isSystemMessage Boolean  @default(false)
+
+  @@index([threadId, sentAt])
+  @@index([senderId])
+  @@map("messages")
+}
+
+// Scheduling system
+model Viewing {
+  id            String   @id @default(cuid())
+  listingId     String
+  listing       Listing  @relation(fields: [listingId], references: [id])
+  seekerId      String
+  seeker        User     @relation(fields: [seekerId], references: [id])
+
+  proposedTimes DateTime[]
+  confirmedTime DateTime?
+  duration      Int      @default(30)
+  status        String   @default("pending")
+  location      Json
+  notes         String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([listingId, status])
+  @@index([seekerId, status])
+  @@index([confirmedTime])
+  @@map("viewings")
+}
+
+// Admin moderation
+model Report {
+  id          String   @id @default(cuid())
+  reporterId  String
+  reporter    User     @relation(fields: [reporterId], references: [id])
+
+  targetType  String
+  targetId    String
+  reason      String
+  description String
+  evidence    String[] @default([])
+  status      String   @default("pending")
+  priority    String   @default("medium")
+  assignedTo  String?
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, priority])
+  @@index([targetType, targetId])
+  @@map("reports")
+}
+
+// Payment system
+model Payment {
+  id                    String   @id @default(cuid())
+  listingId             String
+  listing               Listing  @relation(fields: [listingId], references: [id])
+
+  seekerId              String
+  seeker                User     @relation(fields: [seekerId], references: [id])
+
+  listerId              String
+  amount                Float
+  currency              String   @default("ils")
+  status                String
+  stripePaymentIntentId String   @unique
+  stripeChargeId        String?
+
+  feeType               String
+  matchId               String?
+
+  createdAt             DateTime @default(now())
+  processedAt           DateTime?
+  refundedAt            DateTime?
+
+  @@index([listingId, status])
+  @@index([seekerId])
+  @@map("payments")
+}
+
+// Enums
+enum Role {
+  SEEKER
+  LISTER
+  ADMIN
+}

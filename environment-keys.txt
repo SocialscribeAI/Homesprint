@@ -1,0 +1,65 @@
+# HomeSprint Environment Variables Setup
+# Copy these keys to your .env.local file
+
+# REQUIRED: JWT Configuration
+# Generate a secure random string (32+ characters)
+JWT_SECRET=your-very-secure-jwt-secret-here
+
+# OPTIONAL: Supabase Configuration (for production database)
+# Get these from https://supabase.com after creating a project
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key-here
+
+# OPTIONAL: Database Configuration (if using PostgreSQL directly)
+DATABASE_URL=postgresql://username:password@localhost:5432/homesprint
+
+# OPTIONAL: Redis Configuration (for caching and sessions)
+REDIS_URL=redis://localhost:6379
+
+# OPTIONAL: Mapbox Configuration (for location services)
+# Get from https://account.mapbox.com
+NEXT_PUBLIC_MAPBOX_TOKEN=pk.your-mapbox-token-here
+
+# OPTIONAL: File Storage Configuration
+STORAGE_BUCKET=your-storage-bucket-name
+STORAGE_ACCESS_KEY=your-storage-access-key
+STORAGE_SECRET_KEY=your-storage-secret-key
+
+# OPTIONAL: SMS/OTP Configuration
+# For production OTP sending via Twilio
+OTP_SENDER_ID=HomeSprint
+TWILIO_ACCOUNT_SID=your-twilio-account-sid
+TWILIO_AUTH_TOKEN=your-twilio-auth-token
+TWILIO_PHONE_NUMBER=+1234567890
+
+# OPTIONAL: Analytics Configuration
+# Get from https://posthog.com
+POSTHOG_KEY=your-posthog-project-key
+NEXT_PUBLIC_POSTHOG_KEY=your-posthog-project-key
+
+# OPTIONAL: Payment Configuration (Stripe)
+# Get from https://stripe.com
+STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-publishable-key
+STRIPE_SECRET_KEY=sk_test_your-stripe-secret-key
+STRIPE_WEBHOOK_SECRET=whsec_your-webhook-secret
+
+# OPTIONAL: Google OAuth via Supabase
+# Gmail authentication is enabled in Supabase by default
+# You can configure it in Supabase dashboard:
+# 1. Go to Authentication → Providers → Google
+# 2. Enable it and add your Google OAuth credentials if needed
+# 3. Set redirect URL to: http://localhost:3000/auth/callback (dev)
+#    or https://yourdomain.com/auth/callback (production)
+
+# OPTIONAL: Application Configuration
+NEXT_PUBLIC_DEFAULT_LOCALE=en
+NODE_ENV=development
+
+# OPTIONAL: Security
+# Generate a 32-character encryption key
+ENCRYPTION_KEY=your-32-character-encryption-key
+
+# MINIMUM REQUIRED KEYS FOR MVP:
+# - JWT_SECRET (required for authentication)
+#
+# The rest are optional and can be added as you implement features.

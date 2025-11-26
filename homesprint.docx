@@ -1,0 +1,857 @@
+HomeSprint Web MVP – Developer Specification
+
+
+
+
+1. Overview
+
+
+
+
+1.1 Purpose
+This document serves as the complete technical specification for the HomeSprint Web MVP, targeting a launch in Jerusalem. It is intended for engineering, QA, and DevOps teams to understand the scope, architecture, implementation details, and delivery milestones.
+
+
+
+
+1.2 Scope
+Mobile-responsive web app (no native apps)
+Centralized listings: rooms and full apartments
+Standardized data for fast search/matching
+Verified communication & viewing scheduling
+~12-week timeline to ship with a stable funnel
+
+
+
+
+1.3 Goals
+Centralize real estate listings in Jerusalem.
+Standardize listing data to enable fast, reliable search and matching.
+Enable verified communication and viewing scheduling between listers and seekers.
+Ship a stable MVP in ~12 weeks with measurable success metrics.
+
+
+
+
+1.4 Non-Goals (MVP)
+Payments/escrow
+E-signatures or background checks
+Native iOS/Android apps
+Advanced ML-based ranking (rule-based matching v0 only)
+
+
+
+
+2. Success Metrics
+North Star
+Median time from signup → first qualified match
+Secondary Metrics
+Message → viewing conversion rate
+Verified listing ratio
+Report rate
+
+
+
+
+3. Roles & Permissions
+Auth: JWT with role claims.
+Access Control: Row-level enforcement via server-side owner checks and status validations.
+
+
+
+
+Role
+Permissions
+Admin
+Full CRUD on users, listings, reports; moderation; analytics; verify listers; feature placement
+Lister
+Create/manage listings; review applicants; messaging; schedule; mark filled
+Seeker
+Create profile; browse/search; save; message; schedule; apply
+
+
+
+
+
+4. Information Architecture & Routes
+Public Routes
+
+
+
+
+Route
+Description
+/
+Home (Top Matches + Search)
+/listings
+Search results
+/u/[username]
+Public profile (limited fields)
+/listing/[id]
+Listing details
+/auth/*
+OTP/SSO flows
+/universities/[slug]
+Hub landing pages (pilot cohorts)
+/legal/{terms,privacy}
+Legal documents
+
+
+
+
+
+Authenticated Routes
+
+
+
+
+Route
+Description
+/me
+Profile & settings (EN/HE toggle)
+/me/saved
+Shortlist
+/me/applications
+Applications dashboard
+/me/listings
+My listings
+/messages
+Threads
+/messages/:id
+Messages
+/schedule
+Viewing scheduler
+/admin/*
+Admin-only: flags, users, listings, insights
+
+
+
+
+
+5. Tech Stack
+Frontend
+Framework: Next.js App Router
+Language: TypeScript
+Styling: TailwindCSS + RTL support ([dir="rtl"])
+UI Components: shadcn/ui
+Data Fetching: React Query (TanStack)
+Validation: Zod
+i18n: i18next (EN/HE)
+Backend
+API Layer: Next.js Route Handlers + Edge Functions (reads), Node.js server (mutations)
+ORM: Prisma
+Database: PostgreSQL
+Caching/Queues: Redis
+WebSockets: Pusher-compatible or Socket.IO
+Maps: Mapbox GL JS
+Storage: S3-compatible (Cloudflare R2 or AWS S3) + Sharp for image compression
+Auth: OTP via SMS (MessageBird/Twilio) + Email/Google/Apple via Auth.js or Clerk
+Analytics: PostHog
+CI/CD: GitHub Actions, Vercel (frontend), Railway/Fly.io/Render (API/DB)
+
+
+
+
+6. Data Model (ERD Outline)
+Core Entities
+User
+prisma
+
+model User {
+  id             String   @id @default(cuid())
+  role           Role
+  phone          String   @unique
+  email          String?  @unique
+  name           String?
+  lang           String   @default("en")
+  verifiedFlags  Json     @default("{}")
+  createdAt      DateTime @default(now())
+  Profile        Profile?
+  Listings       Listing[]
+}
+Profile
+prisma
+
+model Profile {
+  userId           String  @id
+  user             User    @relation(fields: [userId], references: [id])
+  budgetMin        Int
+  budgetMax        Int
+  moveInEarliest   DateTime
+  moveInLatest     DateTime
+  areas            String[]
+  occupancyType    String
+  lifestyle        Json
+  bio              String?
+}
+Listing
+prisma
+
+model Listing {
+  id              String   @id @default(cuid())
+  ownerUserId     String
+  owner           User     @relation(fields: [ownerUserId], references: [id])
+  type            String
+  address         String
+  neighborhood    String
+  geo             Unsupported("geography(Point,4326)")
+  rent            Int
+  billsAvg        Int?
+  deposit         Int?
+  sizeM2          Int?
+  rooms           Int?
+  bathrooms       Int?
+  floor           Int?
+  elevator        Boolean?
+  furnished       Boolean?
+  amenities       String[]
+  accessibility   String[]
+  roommates       Json?
+  policies        Json?
+  availableFrom   DateTime
+  leaseTermMonths Int?
+  photos          String[]
+  videoUrl        String?
+  description     String
+  completeness    Int      @default(0)
+  status          String   @default("draft")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+Application
+prisma
+
+model Application {
+  id           String    @id @default(cuid())
+  listingId    String
+  listing      Listing   @relation(fields: [listingId], references: [id])
+  seekerUserId String
+  seeker       User      @relation(fields: [seekerUserId], references: [id])
+  status       String    @default("pending")
+  score        Json
+  message      String?
+  createdAt    DateTime  @default(now())
+}
+Thread & Message
+prisma
+
+model Thread {
+  id        String     @id @default(cuid())
+  Messages  Message[]
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  threadId   String
+  thread     Thread   @relation(fields: [threadId], references: [id])
+  senderId   String
+  sender     User     @relation(fields: [senderId], references: [id])
+  body       String
+  attachments String[]
+  sentAt     DateTime @default(now())
+  readAt     DateTime?
+}
+Viewing
+prisma
+
+model Viewing {
+  id        String   @id @default(cuid())
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id])
+  seekerId  String
+  seeker    User     @relation(fields: [seekerId], references: [id])
+  when      DateTime
+  status    String   @default("pending")
+}
+Report
+prisma
+
+model Report {
+  id          String   @id @default(cuid())
+  reporterId  String
+  reporter    User     @relation(fields: [reporterId], references: [id])
+  targetType  String
+  targetId    String
+  reason      String
+  notes       String?
+  status      String   @default("pending")
+}
+University
+prisma
+
+model University {
+  id     String @id @default(cuid())
+  name   String
+  city   String
+  slug   String @unique
+}
+Indexes
+geo GIST index on Listing.geo
+B-tree on Listing.status, Listing.availableFrom
+Trigram index on Listing.description
+Composite index on (rent, neighborhood)
+
+
+
+
+7. API Contracts (REST, JSON)
+All requests/responses validated with Zod.
+Auth
+
+
+
+
+Method
+Route
+Description
+POST
+/api/auth/otp/request
+Request OTP
+POST
+/api/auth/otp/verify
+Verify OTP → return token
+POST
+/api/auth/logout
+Logout
+
+
+
+
+
+Profiles
+
+
+
+
+Method
+Route
+Description
+GET
+/api/me/profile
+Get current user profile
+PUT
+/api/me/profile
+Update profile (budget, dates, etc.)
+
+
+
+
+
+Listings
+
+
+
+
+Method
+Route
+Description
+GET
+/api/listings
+Search/filter listings
+GET
+/api/listings/:id
+Get listing by ID
+POST
+/api/listings
+Create listing (Lister only)
+PUT
+/api/listings/:id
+Update listing (Owner only)
+POST
+/api/listings/:id/publish
+Publish listing
+POST
+/api/listings/:id/unpublish
+Unpublish listing
+POST
+/api/listings/:id/mark-filled
+Mark as filled
+
+
+
+
+
+Applications
+
+
+
+
+Method
+Route
+Description
+POST
+/api/listings/:id/applications
+Apply to listing (Seeker only)
+GET
+`/api/applications?role={seeker lister}`
+
+
+POST
+`/api/applications/:id/{accept decline}`
+
+
+
+
+
+
+
+Messages
+
+
+
+
+Method
+Route
+Description
+GET
+/api/threads
+Get all message threads
+GET
+/api/threads/:id/messages
+Get messages in thread
+POST
+/api/threads/:id/messages
+Send message in thread
+
+
+
+
+
+Schedule
+
+
+
+
+Method
+Route
+Description
+POST
+/api/listings/:id/viewings
+Propose viewing time
+PUT
+/api/viewings/:id
+Confirm/cancel viewing
+
+
+
+
+
+Reports
+
+
+
+
+Method
+Route
+Description
+POST
+/api/reports
+Submit report
+
+
+
+
+
+Admin
+
+
+
+
+Method
+Route
+Description
+GET
+/api/admin/flags
+Get flagged content
+POST
+/api/admin/verify-user
+Verify user
+DELETE
+/api/admin/listings/:id
+Remove listing
+
+
+
+
+
+Error Shape
+JSON
+
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "...",
+    "fields": {
+      "rent": "Must be positive"
+    }
+  }
+}
+
+
+
+
+8. Zod Schemas (Excerpt)
+Listing Creation Schema
+TypeScript
+
+const ListingCreate = z.object({
+  type: z.enum(["room", "apartment"]),
+  address: z.string().min(5),
+  neighborhood: z.string().min(2),
+  geo: z.object({ lat: z.number(), lng: z.number() }),
+  rent: z.number().int().positive(),
+  billsAvg: z.number().int().nonnegative().optional(),
+  deposit: z.number().int().nonnegative().optional(),
+  availableFrom: z.string().datetime(),
+  leaseTermMonths: z.number().int().positive().optional(),
+  furnished: z.boolean().optional(),
+  amenities: z.array(z.string()).max(20),
+  photos: z.array(z.string().url()).min(1).max(15),
+  description: z.string().min(30).max(1200)
+});
+
+
+
+
+9. Matching v0 (Rule-Based) – Pseudocode
+JavaScript
+
+function scoreMatch(profile, listing) {
+  let score = 0;
+
+  // Budget (0–30)
+  if (listing.rent >= profile.budgetMin && listing.rent <= profile.budgetMax) {
+    const mid = (profile.budgetMin + profile.budgetMax)/2;
+    score += 30 - Math.min(30, Math.abs(listing.rent - mid)/mid * 30);
+  }
+
+  // Dates (0–20)
+  if (new Date(listing.availableFrom) >= profile.moveInEarliest &&
+      new Date(listing.availableFrom) <= profile.moveInLatest) score += 20;
+
+  // Distance (0–15)
+  score += distancePenalty(profile.areas, listing.geo); // returns 0..15
+
+  // Lifestyle (0–20)
+  score += lifestyleCompatibility(profile.lifestyle, listing.policies);
+
+  // Listing quality (0–15)
+  score += Math.min(15, Math.floor(listing.completeness/7));
+
+  return Math.round(score);
+}
+Hard Filters: Occupancy type, pets/smoking “hard no”
+Tie-Breakers: Verified badges, response time, review score
+
+
+
+
+10. UX Flows & Acceptance Criteria
+A. Seeker Onboarding
+Given an unauthed user, when they request OTP and verify, they are redirected to /me with a 3-step wizard (budget/dates → areas → lifestyle).
+AC: Failed OTP attempts lock for 60s after 5 tries; i18n works EN/HE; RTL mirrors layout.
+B. Create Listing (Lister)
+AC: Required fields enforced; completeness score ≥ 70 to publish; duplicate warning if same address + owner phone or near-identical text.
+C. Search & Save
+AC: Filters persist across navigation; saved searches trigger email/SMS alerts; returning user sees Top Matches first.
+D. Messaging & Scheduling
+AC: WebSocket delivers messages < 1s P95; proposed times appear in both calendars; ICS export works.
+E. Moderation
+AC: Reported item becomes hidden after 3+ independent reports pending review; admin can restore or remove with audit log.
+
+
+
+
+11. Internationalization & Accessibility
+Languages: EN and HE
+RTL Layout: Toggle with Tailwind [dir=rtl] utilities
+WCAG 2.1 AA Compliance: Labels, focus states, color contrast, keyboard navigation
+
+
+
+
+12. Security
+JWT with short-lived access + rotating refresh tokens
+Rate limiting: 5 OTP requests/hour/phone, 60 req/min/IP burst
+Server-side validation with Zod; sanitize HTML in descriptions
+Signed S3 URLs; server-side image MIME sniffing; 10MB/photo limit; virus scan via ClamAV lambda
+Audit logs for admin actions; immutable logs for deletes
+
+
+
+
+13. Performance Budgets
+LCP < 2.5s on 3G Fast
+TTI < 3.5s
+< 170KB JS on initial route
+Image CDN with AVIF/WebP; lazy load photos; code-split heavy routes
+
+
+
+
+14. Observability
+Structured logs (pino) with request IDs
+Error tracking (Sentry)
+Health checks at /api/health
+Uptime alerts
+PostHog events (see §15)
+
+
+
+
+15. Analytics Events (Minimum Set)
+
+
+
+
+Event
+Description
+signup_completed
+User completed onboarding
+profile_completed
+Profile fully filled
+listing_published
+Listing published
+message_sent
+Message sent
+viewing_scheduled
+Viewing scheduled
+application_submitted
+Application submitted
+listing_marked_filled
+Listing marked as filled
+report_submitted
+Report submitted
+
+Properties: role, neighborhood, rent bucket, timestamp, language, device
+
+
+
+
+16. Dev Environment & Repo
+Monorepo Structure
+text
+
+/apps
+  /web (Next.js)
+  /api (Next.js routes or Express)
+/packages
+  /ui (shared components)
+  /config (eslint, tsconfig)
+  /schemas (zod)
+Scripts
+pnpm dev
+pnpm test
+pnpm lint
+
+
+
+
+17. CI/CD
+PR checks: typecheck, lint, tests, build
+Preview deploy on Vercel per PR
+Migrations: Prisma migrate on pnpm db:push, pnpm seed
+Deploy to main after approval; backup DB pre-deploy
+
+
+
+
+18. Config & Secrets (.env Sample)
+env
+
+DATABASE_URL=postgres://...
+REDIS_URL=...
+NEXT_PUBLIC_MAPBOX_TOKEN=...
+STORAGE_BUCKET=...
+AUTH_SECRET=...
+OTP_SENDER_ID=...
+POSTHOG_KEY=...
+NEXT_PUBLIC_DEFAULT_LOCALE=en
+
+
+
+
+19. Testing Plan
+Unit Tests: Matching logic, validation, utils
+Integration Tests: Auth, listing CRUD, search queries
+E2E Tests: Onboarding, create listing, apply, message, schedule (Playwright)
+Accessibility: axe CI check
+
+
+
+
+20. Seed Data
+50 listings across 8 neighborhoods
+Realistic rents, photos, availability
+30 seekers, 10 listers, 3 admins
+Scripts to randomize availability and completeness
+
+
+
+
+21. Feature Flags
+enableIdVerification
+enableIsraelHebrew
+enableCampusHub
+enableBoosts (post-MVP)
+
+
+
+
+22. Milestones
+
+
+
+
+Weeks
+Deliverables
+W1–2
+IA, design system, auth & onboarding
+W3–4
+Listing CRUD + search/filters + storage
+W5–6
+Messaging + scheduling
+W7–8
+Matching v0 + saved searches + alerts
+W9
+Admin moderation + analytics events
+W10–11
+QA, perf, a11y, seed data, beta
+W12
+Launch Jerusalem hub
+
+
+
+
+
+23. Open Questions
+Do we require ID verification for “Featured” listings at MVP?
+Are broker accounts allowed, and if so, how labeled?
+Minimum lease term and price caps by policy?
+
+
+
+
+24. Appendix – Example Route Handler (Next.js)
+TypeScript
+
+// app/api/listings/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { prisma } from "@/server/db";
+
+const Query = z.object({
+  q: z.string().optional(),
+  minRent: z.coerce.number().optional(),
+  maxRent: z.coerce.number().optional(),
+  type: z.enum(["room","apartment"])
+    .optional(),
+  neighborhood: z.string().optional(),
+  page: z.coerce.number().default(1),
+  sort: z.enum(["new","rent_asc","rent_desc"])
+    .default("new")
+});
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const parse = Query.safeParse(Object.fromEntries(searchParams.entries()));
+  if (!parse.success) return NextResponse.json({ error: parse.error }, { status: 400 });
+
+  const { q, minRent, maxRent, type, neighborhood, page, sort } = parse.data;
+  const take = 20, skip = (page - 1) * take;
+  const where: any = { status: "active" };
+
+  if (type) where.type = type;
+  if (neighborhood) where.neighborhood = neighborhood;
+  if (minRent || maxRent) where.rent = { gte: minRent ?? 0, lte: maxRent ?? 999999 };
+  if (q) where.description = { search: q };
+
+  const orderBy = sort === "rent_asc" ? { rent: "asc" } : sort === "rent_desc" ? { rent: "desc" } : { createdAt: "desc" };
+
+  const [items, total] = await Promise.all([
+    prisma.listing.findMany({ where, orderBy, skip, take }),
+    prisma.listing.count({ where })
+  ]);
+
+  return NextResponse.json({ items, total, page, pageSize: take });
+}
+
+
+
+25. Diagrams of Architecture 
+
+
+ System Architecture Diagram
+
+
+
+
+ User Flow Diagram
+
+
+
+ Data Model ERD
+  
+
+
+API Layer Architecture
+
+
+Matching Algorithm Flow
+
+
+
+
+
+
+ Authentication Flow
+
+
+
+ Admin Moderation Flow
+
+
+
+
+
+ Viewing Scheduling Flow
+
+
+ Data Indexing Strategy
+
+
+
+
+
+
+
+
+
+
+ Performance Monitoring
+
+
+
+
+
+Feature Flag Management
+
+
+ Internationalization Flow
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Security Layers
+
+
