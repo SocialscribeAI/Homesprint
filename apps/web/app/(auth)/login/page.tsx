@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
@@ -8,11 +8,19 @@ import { GmailAuthButton } from '@/components/forms/GmailAuthButton';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, isAuthenticated, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      console.log('User already authenticated, redirecting to /me');
+      router.push('/me');
+    }
+  }, [isAuthenticated, authLoading, router]);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +36,27 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Don't render login form if already authenticated (will redirect)
+  if (isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Redirecting to dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">

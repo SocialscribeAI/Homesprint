@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -22,20 +23,32 @@ export async function GET(request: NextRequest) {
   }
 
   if (code) {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error('Missing Supabase environment variables')
-      return NextResponse.redirect(
-        new URL('/login?error=Configuration error', origin)
-      )
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    const cookieStore = await cookies()
+    
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              )
+            } catch {
+              // The `setAll` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing sessions.
+            }
+          },
+        },
+      }
+    )
 
     try {
-      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
       if (exchangeError) {
         console.error('Exchange error:', exchangeError)
@@ -47,28 +60,10 @@ export async function GET(request: NextRequest) {
         )
       }
 
-      console.log('Session created successfully for user:', data.user?.email)
-
-      // Create response with redirect to dashboard
-      const response = NextResponse.redirect(new URL('/me', origin))
+      console.log('Session exchanged successfully, redirecting to /me')
       
-      // Set session cookies if available
-      if (data.session) {
-        response.cookies.set('sb-access-token', data.session.access_token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: 60 * 60 * 24 * 7, // 7 days
-        })
-        response.cookies.set('sb-refresh-token', data.session.refresh_token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: 60 * 60 * 24 * 30, // 30 days
-        })
-      }
-
-      return response
+      // Redirect to dashboard
+      return NextResponse.redirect(new URL('/me', origin))
     } catch (err) {
       console.error('Callback error:', err)
       return NextResponse.redirect(
@@ -81,4 +76,3 @@ export async function GET(request: NextRequest) {
   console.log('No code or error in callback, redirecting to home')
   return NextResponse.redirect(new URL('/', origin))
 }
-
