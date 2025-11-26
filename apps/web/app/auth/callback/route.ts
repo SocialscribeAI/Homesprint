@@ -1,5 +1,4 @@
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -23,7 +22,8 @@ export async function GET(request: NextRequest) {
   }
 
   if (code) {
-    const cookieStore = await cookies()
+    // Create a response that we'll add cookies to
+    const response = NextResponse.redirect(new URL('/me', origin))
     
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -31,24 +31,19 @@ export async function GET(request: NextRequest) {
       {
         cookies: {
           getAll() {
-            return cookieStore.getAll()
+            return request.cookies.getAll()
           },
           setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) =>
-                cookieStore.set(name, value, options)
-              )
-            } catch {
-              // The `setAll` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing sessions.
-            }
+            cookiesToSet.forEach(({ name, value, options }) => {
+              response.cookies.set(name, value, options)
+            })
           },
         },
       }
     )
 
     try {
-      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
       if (exchangeError) {
         console.error('Exchange error:', exchangeError)
@@ -60,10 +55,10 @@ export async function GET(request: NextRequest) {
         )
       }
 
-      console.log('Session exchanged successfully, redirecting to /me')
+      console.log('Session exchanged successfully for:', data.user?.email)
       
-      // Redirect to dashboard
-      return NextResponse.redirect(new URL('/me', origin))
+      // Return the response with cookies set
+      return response
     } catch (err) {
       console.error('Callback error:', err)
       return NextResponse.redirect(
