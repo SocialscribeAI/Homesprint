@@ -24,6 +24,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@homesprint/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@homesprint/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@radix-ui/react-slot':
         specifier: ^1.0.2
         version: 1.2.4(@types/react@18.3.27)(react@18.3.1)
