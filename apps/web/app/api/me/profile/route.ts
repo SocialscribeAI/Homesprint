@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '../../../../packages/db/src';
-
-// Import auth utility (we'll create this next)
-import { getCurrentUser } from '../../../../lib/auth';
+import { prisma } from '@homesprint/db';
+import { getCurrentUser } from '@/lib/auth';
 
 const ProfileSchema = z.object({
   budgetMin: z.number().int().positive().min(1000).max(50000),
