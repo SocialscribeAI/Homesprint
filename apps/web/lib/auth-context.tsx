@@ -32,26 +32,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Check if user is already logged in
+  // Check if user is already logged in via Supabase
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-          // Verify token with backend
-          const response = await fetch('/api/auth/me', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
+        // First check Supabase session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          console.log('Found Supabase session for:', session.user.email);
+          setUser({
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.user_metadata?.name || session.user.user_metadata?.full_name,
+            phone: session.user.user_metadata?.phone,
+            role: session.user.user_metadata?.role || 'SEEKER',
+            lang: 'en',
+            verifiedFlags: { 
+              email_verified: session.user.email_confirmed_at ? true : false,
+              google_verified: session.user.app_metadata?.provider === 'google',
             },
           });
+        } else {
+          // Fallback to JWT token check
+          const token = localStorage.getItem('accessToken');
+          if (token) {
+            const response = await fetch('/api/auth/me', {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+              },
+            });
 
-          if (response.ok) {
-            const data = await response.json();
-            setUser(data.user);
-          } else {
-            // Token is invalid, clear it
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
+            if (response.ok) {
+              const data = await response.json();
+              setUser(data.user);
+            } else {
+              localStorage.removeItem('accessToken');
+              localStorage.removeItem('refreshToken');
+            }
           }
         }
       } catch (error) {
@@ -62,6 +80,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     checkAuth();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email);
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          setUser({
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.user_metadata?.name || session.user.user_metadata?.full_name,
+            phone: session.user.user_metadata?.phone,
+            role: session.user.user_metadata?.role || 'SEEKER',
+            lang: 'en',
+            verifiedFlags: { 
+              email_verified: session.user.email_confirmed_at ? true : false,
+              google_verified: session.user.app_metadata?.provider === 'google',
+            },
+          });
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const requestOTP = async (phone: string) => {
@@ -125,6 +171,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
+      // Sign out from Supabase
+      await supabase.auth.signOut();
+      
+      // Also try the API logout for JWT tokens
       const token = localStorage.getItem('accessToken');
       if (token) {
         await fetch('/api/auth/logout', {
