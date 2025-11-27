@@ -25,8 +25,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${manrope.variable} ${inter.variable}`}>
-      <body className="bg-cloud text-midnight font-body min-h-screen antialiased selection:bg-mint selection:text-white">
+    <html lang="en" className={`${manrope.variable} ${inter.variable}`} suppressHydrationWarning>
+      <body className="bg-cloud text-midnight font-body min-h-screen antialiased selection:bg-mint selection:text-white" suppressHydrationWarning>
         <AuthProvider>
           {children}
         </AuthProvider>

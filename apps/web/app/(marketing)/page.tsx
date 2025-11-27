@@ -59,7 +59,7 @@ export default function MarketingHome() {
           className="relative z-10 mx-auto max-w-5xl text-center"
         >
           {/* Badge */}
-          <motion.div variants={fadeInUp} className="mb-8 flex justify-center">
+          <motion.div variants={fadeInUp as any} className="mb-8 flex justify-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-midnight/5 bg-white/50 px-4 py-1.5 text-sm font-medium text-midnight/60 backdrop-blur-md">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-mint opacity-75"></span>
@@ -70,7 +70,7 @@ export default function MarketingHome() {
           </motion.div>
 
           <motion.h1 
-            variants={fadeInUp}
+            variants={fadeInUp as any}
             className="font-sans text-5xl font-extrabold tracking-tight text-midnight md:text-7xl lg:text-8xl leading-[1.1]"
           >
             Find your place. <br className="hidden md:block" />
@@ -83,7 +83,7 @@ export default function MarketingHome() {
           </motion.h1>
           
           <motion.p 
-            variants={fadeInUp}
+            variants={fadeInUp as any}
             className="mx-auto mt-8 max-w-2xl text-lg font-medium text-midnight/60 md:text-xl leading-relaxed"
           >
             The student-first rental sanctuary. Verified landlords, roommate matching, and zero ghosting. <br className="hidden md:block"/> Finally, a way to move that feels like home.
@@ -91,7 +91,7 @@ export default function MarketingHome() {
 
           {/* Floating Island Search Bar - Glassmorphism */}
           <motion.div 
-            variants={fadeInUp}
+            variants={fadeInUp as any}
             className="mx-auto mt-12 w-full max-w-xl"
           >
             <div className="relative group">
