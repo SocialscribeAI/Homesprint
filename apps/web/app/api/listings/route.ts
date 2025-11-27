@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (!dbUser || dbUser.role !== 'LISTER') {
+    if (!dbUser || ((dbUser as any).role !== 'LISTER' && (dbUser as any).role !== 'ADMIN')) {
       return NextResponse.json({
         error: {
           code: 'FORBIDDEN',
