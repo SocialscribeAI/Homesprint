@@ -38,8 +38,8 @@ export const userService = {
       .insert([
         {
           phone: userData.phone || '', // Ensure required fields
-          email: userData.email,
-          name: userData.name,
+          email: userData.email || null,
+          name: userData.name || null,
           role: userData.role || 'SEEKER',
           lang: 'en',
           verified_flags: userData.email ? { email_verified: true } : {},
