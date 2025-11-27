@@ -206,7 +206,7 @@ export default function MarketingHome() {
         <div className="relative z-10 mx-auto max-w-7xl px-6 flex flex-col md:flex-row items-center justify-between gap-16">
           <div className="max-w-xl relative">
              <motion.div 
-               variants={floatAnimation}
+               variants={floatAnimation as any}
                className="absolute -top-12 -left-12 text-6xl opacity-20 rotate-[-15deg]"
              >
                🔑
