@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { listingService } from '@/lib/db-service';
-import { getCurrentUser } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
 
 const SearchSchema = z.object({
   query: z.string().optional(),
@@ -23,10 +24,13 @@ export async function GET(request: NextRequest) {
     const { page, limit, query, ...searchFilters } = filters;
     const offset = (page - 1) * limit;
 
+    const cookieStore = await cookies()
+    const supabase = createClient(cookieStore)
+
     // Use Supabase service for listings
     let listings;
     if (query) {
-      listings = await listingService.search(query);
+      listings = await listingService.search(query, supabase);
     } else {
       listings = await listingService.getActive({
         neighborhood: searchFilters.neighborhood,
@@ -36,7 +40,7 @@ export async function GET(request: NextRequest) {
         furnished: searchFilters.furnished,
         limit,
         offset,
-      });
+      }, supabase);
     }
 
     const total = listings.length;
@@ -102,12 +106,23 @@ const CreateListingSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request);
+    const cookieStore = await cookies()
+    const supabase = createClient(cookieStore)
+    const { data: { user } } = await supabase.auth.getUser()
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'LISTER') {
+    // Note: The 'role' property is in user_metadata for Supabase Auth users,
+    // but our DB user model has it as a column. We should fetch the DB user.
+    const { data: dbUser } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!dbUser || dbUser.role !== 'LISTER') {
       return NextResponse.json({
         error: {
           code: 'FORBIDDEN',
@@ -144,7 +159,7 @@ export async function POST(request: NextRequest) {
       lease_term_months: listingData.leaseTermMonths,
       photos: listingData.photos,
       video_url: listingData.videoUrl,
-    });
+    }, supabase);
 
     return NextResponse.json({
       listing,

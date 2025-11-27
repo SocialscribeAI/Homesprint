@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import { userService, profileService } from '@/lib/db-service';
+import { createClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
 
 const VerifySchema = z.object({
   phone: z.string().regex(/^\+972\d{9}$/, 'Invalid Israeli phone number'),
@@ -28,8 +30,11 @@ export async function POST(request: NextRequest) {
       }, { status: 401 });
     }
 
+    const cookieStore = await cookies()
+    const supabase = createClient(cookieStore)
+
     // Find or create user
-    let user = await userService.findByPhone(phone);
+    let user = await userService.findByPhone(phone, supabase);
     const isNewUser = !user;
 
     if (!user) {
@@ -38,7 +43,7 @@ export async function POST(request: NextRequest) {
         phone,
         name: name || undefined,
         role: role || 'SEEKER',
-      });
+      }, supabase);
     } else {
       // Update existing user verification
       const updates: any = {
@@ -46,11 +51,11 @@ export async function POST(request: NextRequest) {
       };
       if (name) updates.name = name;
       if (role) updates.role = role;
-      user = await userService.update(user.id, updates);
+      user = await userService.update(user.id, updates, supabase);
     }
 
     // Get user profile
-    const profile = await profileService.get(user.id);
+    const profile = await profileService.get(user.id, supabase);
 
     // Generate JWT tokens
     const accessToken = jwt.sign(

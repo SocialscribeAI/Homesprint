@@ -6,8 +6,12 @@
  * making it easier to manage queries and ensure consistency.
  */
 
-import { supabase } from './supabase'
-import type { Database } from './supabase'
+import { createClient } from './supabase/client'
+import type { Database } from './supabase/types'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+// Default client for client-side usage
+const defaultClient = createClient()
 
 // Type definitions
 export type User = Database['public']['Tables']['users']['Row']
@@ -27,12 +31,13 @@ export const userService = {
     email?: string
     name?: string
     role?: 'SEEKER' | 'LISTER' | 'ADMIN'
-  }): Promise<User> {
+  }, client?: SupabaseClient<Database>): Promise<User> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('users')
       .insert([
         {
-          phone: userData.phone,
+          phone: userData.phone || '', // Ensure required fields
           email: userData.email,
           name: userData.name,
           role: userData.role || 'SEEKER',
@@ -51,7 +56,8 @@ export const userService = {
   /**
    * Find user by phone
    */
-  async findByPhone(phone: string): Promise<User | null> {
+  async findByPhone(phone: string, client?: SupabaseClient<Database>): Promise<User | null> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('users')
       .select('*')
@@ -67,7 +73,8 @@ export const userService = {
   /**
    * Find user by email
    */
-  async findByEmail(email: string): Promise<User | null> {
+  async findByEmail(email: string, client?: SupabaseClient<Database>): Promise<User | null> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('users')
       .select('*')
@@ -83,7 +90,8 @@ export const userService = {
   /**
    * Find user by ID
    */
-  async findById(userId: string): Promise<User | null> {
+  async findById(userId: string, client?: SupabaseClient<Database>): Promise<User | null> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('users')
       .select('*')
@@ -99,7 +107,8 @@ export const userService = {
   /**
    * Update user
    */
-  async update(userId: string, updates: Partial<User>): Promise<User> {
+  async update(userId: string, updates: Partial<User>, client?: SupabaseClient<Database>): Promise<User> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('users')
       .update({
@@ -117,7 +126,8 @@ export const userService = {
   /**
    * Get user with profile
    */
-  async getWithProfile(userId: string) {
+  async getWithProfile(userId: string, client?: SupabaseClient<Database>) {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('users')
       .select(
@@ -154,7 +164,8 @@ export const profileService = {
     occupancy_type: string
     lifestyle: Record<string, any>
     bio?: string
-  }): Promise<Profile> {
+  }, client?: SupabaseClient<Database>): Promise<Profile> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('profiles')
       .insert([profileData])
@@ -168,7 +179,8 @@ export const profileService = {
   /**
    * Get user profile
    */
-  async get(userId: string): Promise<Profile | null> {
+  async get(userId: string, client?: SupabaseClient<Database>): Promise<Profile | null> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -184,7 +196,8 @@ export const profileService = {
   /**
    * Update profile
    */
-  async update(userId: string, updates: Partial<Profile>): Promise<Profile> {
+  async update(userId: string, updates: Partial<Profile>, client?: SupabaseClient<Database>): Promise<Profile> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('profiles')
       .update(updates)
@@ -199,7 +212,8 @@ export const profileService = {
   /**
    * Upsert profile (create or update)
    */
-  async upsert(profileData: Partial<Profile> & { user_id: string }): Promise<Profile> {
+  async upsert(profileData: Partial<Profile> & { user_id: string }, client?: SupabaseClient<Database>): Promise<Profile> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('profiles')
       .upsert([profileData])
@@ -230,7 +244,8 @@ export const listingService = {
     description: string
     available_from: string
     [key: string]: any
-  }): Promise<Listing> {
+  }, client?: SupabaseClient<Database>): Promise<Listing> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('listings')
       .insert([
@@ -261,7 +276,8 @@ export const listingService = {
     furnished?: boolean
     limit?: number
     offset?: number
-  }): Promise<Listing[]> {
+  }, client?: SupabaseClient<Database>): Promise<Listing[]> {
+    const supabase = client || defaultClient
     let query = supabase
       .from('listings')
       .select(
@@ -311,7 +327,8 @@ export const listingService = {
   /**
    * Get user's listings
    */
-  async getUserListings(userId: string): Promise<Listing[]> {
+  async getUserListings(userId: string, client?: SupabaseClient<Database>): Promise<Listing[]> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('listings')
       .select('*')
@@ -325,7 +342,8 @@ export const listingService = {
   /**
    * Get listing by ID
    */
-  async getById(listingId: string): Promise<Listing | null> {
+  async getById(listingId: string, client?: SupabaseClient<Database>): Promise<Listing | null> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('listings')
       .select(
@@ -346,7 +364,8 @@ export const listingService = {
   /**
    * Update listing
    */
-  async update(listingId: string, updates: Partial<Listing>): Promise<Listing> {
+  async update(listingId: string, updates: Partial<Listing>, client?: SupabaseClient<Database>): Promise<Listing> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('listings')
       .update(updates)
@@ -361,7 +380,8 @@ export const listingService = {
   /**
    * Search listings
    */
-  async search(query: string): Promise<Listing[]> {
+  async search(query: string, client?: SupabaseClient<Database>): Promise<Listing[]> {
+    const supabase = client || defaultClient
     const { data, error } = await supabase
       .from('listings')
       .select(
@@ -381,11 +401,12 @@ export const listingService = {
   /**
    * Get listings matching user profile
    */
-  async getMatchingForUser(userId: string): Promise<Listing[]> {
+  async getMatchingForUser(userId: string, client?: SupabaseClient<Database>): Promise<Listing[]> {
     // Get user profile first
-    const profile = await profileService.get(userId)
+    const profile = await profileService.get(userId, client)
     if (!profile) return []
 
+    const supabase = client || defaultClient
     let query = supabase
       .from('listings')
       .select(
@@ -417,7 +438,8 @@ export const listingService = {
   /**
    * Delete listing
    */
-  async delete(listingId: string): Promise<void> {
+  async delete(listingId: string, client?: SupabaseClient<Database>): Promise<void> {
+    const supabase = client || defaultClient
     const { error } = await supabase
       .from('listings')
       .delete()
@@ -469,4 +491,3 @@ export function handleSupabaseError(error: any): string {
     return error.message || 'Unknown database error'
   }
 }
-

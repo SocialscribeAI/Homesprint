@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { userService } from './db-service';
+import { createClient } from './supabase/server';
+import { cookies } from 'next/headers';
 
 export interface AuthUser {
   id: string;
@@ -14,37 +16,56 @@ export interface AuthUser {
 
 export async function getCurrentUser(request: NextRequest): Promise<AuthUser | null> {
   try {
+    // First check for Supabase Auth session (preferred)
+    const cookieStore = await cookies();
+    const supabase = createClient(cookieStore);
+    const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+
+    if (supabaseUser) {
+      // Fetch full user profile from DB
+      const user = await userService.findById(supabaseUser.id, supabase);
+      
+      if (user) {
+        return {
+          id: user.id,
+          phone: user.phone,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          lang: user.lang,
+          verifiedFlags: user.verified_flags
+        };
+      }
+    }
+
+    // Fallback to JWT token check (for legacy/custom auth)
     const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+      const decoded = jwt.verify(
+        token,
+        process.env.JWT_SECRET || 'development-secret-key'
+      ) as jwt.JwtPayload;
+
+      if (decoded.sub) {
+        const user = await userService.findById(decoded.sub as string, supabase);
+
+        if (user) {
+          return {
+            id: user.id,
+            phone: user.phone,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            lang: user.lang,
+            verifiedFlags: user.verified_flags
+          };
+        }
+      }
     }
 
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || 'development-secret-key'
-    ) as jwt.JwtPayload;
-
-    if (!decoded.sub) {
-      return null;
-    }
-
-    const user = await userService.findById(decoded.sub as string);
-
-    if (!user) {
-      return null;
-    }
-
-    return {
-      id: user.id,
-      phone: user.phone,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      lang: user.lang,
-      verifiedFlags: user.verified_flags
-    };
+    return null;
 
   } catch (error) {
     console.error('Auth Error:', error);

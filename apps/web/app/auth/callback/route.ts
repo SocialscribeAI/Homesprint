@@ -1,39 +1,35 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
-import { NextRequest, NextResponse } from 'next/server'
 
-export const runtime = 'nodejs'
-
-export async function GET(request: NextRequest) {
-  const requestUrl = new URL(request.url)
-  const code = requestUrl.searchParams.get('code')
-  const error = requestUrl.searchParams.get('error')
-  const errorDescription = requestUrl.searchParams.get('error_description')
-  const origin = requestUrl.origin
-
-  if (error) {
-    console.error('Auth error:', error, errorDescription)
-    return NextResponse.redirect(
-      new URL(
-        `/login?error=${encodeURIComponent(errorDescription || error)}`,
-        origin
-      )
-    )
-  }
+export async function GET(request: Request) {
+  const { searchParams, origin } = new URL(request.url)
+  const code = searchParams.get('code')
+  const next = searchParams.get('next') ?? '/me'
 
   if (code) {
-    try {
-      const supabase = createRouteHandlerClient({ cookies })
-      await supabase.auth.exchangeCodeForSession(code)
-
-      return NextResponse.redirect(new URL('/me', origin))
-    } catch (err: any) {
-      console.error('Callback error:', err?.message || err)
-      return NextResponse.redirect(
-        new URL('/login?error=Authentication failed', origin)
-      )
+    const cookieStore = await cookies()
+    const supabase = createClient(cookieStore)
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    
+    if (!error) {
+      const forwardedHost = request.headers.get('x-forwarded-host') // original origin before load balancer
+      const isLocalEnv = process.env.NODE_ENV === 'development'
+      
+      if (isLocalEnv) {
+        // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
+        return NextResponse.redirect(`${origin}${next}`)
+      } else if (forwardedHost) {
+        return NextResponse.redirect(`https://${forwardedHost}${next}`)
+      } else {
+        return NextResponse.redirect(`${origin}${next}`)
+      }
+    } else {
+      console.error('Exchange error:', error.message)
+      return NextResponse.redirect(`${origin}/login?error=auth-code-error`)
     }
   }
 
-  return NextResponse.redirect(new URL('/', origin))
+  // return the user to an error page with instructions
+  return NextResponse.redirect(`${origin}/login?error=no-code`)
 }

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { profileService, userService } from '@/lib/db-service';
-import { getCurrentUser } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
 
 const ProfileSchema = z.object({
   budgetMin: z.number().int().positive().min(1000).max(50000),
@@ -29,12 +30,15 @@ const ProfileSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request);
+    const cookieStore = await cookies()
+    const supabase = createClient(cookieStore)
+    const { data: { user } } = await supabase.auth.getUser()
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const profile = await profileService.get(user.id);
+    const profile = await profileService.get(user.id, supabase);
 
     if (!profile) {
       return NextResponse.json({
@@ -58,7 +62,10 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request);
+    const cookieStore = await cookies()
+    const supabase = createClient(cookieStore)
+    const { data: { user } } = await supabase.auth.getUser()
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -76,11 +83,11 @@ export async function PUT(request: NextRequest) {
       occupancy_type: validatedData.occupancyType,
       lifestyle: validatedData.lifestyle,
       bio: validatedData.bio,
-    });
+    }, supabase);
 
     // Calculate profile completeness
     const completeness = calculateProfileCompleteness(profile);
-    await userService.update(user.id, { profile_completeness: completeness });
+    await userService.update(user.id, { profile_completeness: completeness }, supabase);
 
     return NextResponse.json({
       profile: { ...profile, completeness },
@@ -136,4 +143,3 @@ function calculateProfileCompleteness(profile: any): number {
 
   return Math.min(score, maxScore);
 }
-

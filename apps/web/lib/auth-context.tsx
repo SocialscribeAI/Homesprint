@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from './supabase';
+import { createClient } from './supabase/client';
 
 export interface User {
   id: string;
@@ -31,6 +31,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const supabase = createClient();
 
   // Check if user is already logged in via Supabase
   useEffect(() => {
@@ -53,24 +54,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               google_verified: session.user.app_metadata?.provider === 'google',
             },
           });
-        } else {
-          // Fallback to JWT token check
-          const token = localStorage.getItem('accessToken');
-          if (token) {
-            const response = await fetch('/api/auth/me', {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-              },
-            });
-
-            if (response.ok) {
-              const data = await response.json();
-              setUser(data.user);
-            } else {
-              localStorage.removeItem('accessToken');
-              localStorage.removeItem('refreshToken');
-            }
-          }
         }
       } catch (error) {
         console.error('Auth check failed:', error);
@@ -86,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email);
         
-        if (event === 'SIGNED_IN' && session?.user) {
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
           setUser({
             id: session.user.id,
             email: session.user.email,
@@ -108,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [supabase]);
 
   const requestOTP = async (phone: string) => {
     const response = await fetch('/api/auth/otp/request', {
@@ -232,4 +215,3 @@ export function useAuth() {
   }
   return context;
 }
-
