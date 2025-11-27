@@ -45,7 +45,7 @@ export const userService = {
           verified_flags: userData.email ? { email_verified: true } : {},
           profile_completeness: 0,
         },
-      ])
+      ] as any)
       .select()
       .single()
 
